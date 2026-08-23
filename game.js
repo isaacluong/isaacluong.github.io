@@ -757,13 +757,14 @@ function loadMap(fileName) {
                 const largestDimension = Math.max(size.x, size.y, size.z);
                 const smallestDimension = Math.min(size.x, size.y, size.z);
                 const isFloor = size.y <= 1.1 && size.x > 20 && size.z > 20;
+                const isCombinedSceneMap = fileName === "scene_map.glb" && size.x > 20 && size.z > 20;
                 const isSphere =
                     /sphere|ball|orb/i.test(object.name) ||
                     (object.geometry.attributes.position.count > 50 &&
                         smallestDimension > 0 &&
                         largestDimension / smallestDimension < 1.2);
 
-                if (isFloor) {
+                if (isFloor || isCombinedSceneMap) {
                     return;
                 }
 
