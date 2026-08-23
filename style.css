@@ -31,7 +31,8 @@ body::after {
 
 #health-display,
 #weapon-display,
-#stamina-display {
+#stamina-display,
+#ammo-display {
     position: fixed;
     bottom: 24px;
     z-index: 9999;
@@ -55,6 +56,13 @@ body::after {
     left: 24px;
     bottom: 50px;
     color: #7dd3fc;
+    font-size: 14px;
+}
+
+#ammo-display {
+    right: 24px;
+    bottom: 50px;
+    color: #f4f1de;
     font-size: 14px;
 }
 
