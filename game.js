@@ -35,11 +35,16 @@ const shootDirection = new THREE.Vector3();
 let muzzleFlashUntil = 0;
 let isAiming = false;
 let selectedWeapon = "gun";
+let meleeCooldown = 0;
 const toastProjectiles = [];
 const meatDrops = [];
 const pistolDrops = [];
 const inventory = {
-    pistolShots: 0
+    pistolShots: 0,
+    gunAmmo: 12,
+    gunMaxAmmo: 12,
+    toasterAmmo: 8,
+    toasterMaxAmmo: 8
 };
 
 const inventoryDisplay = document.createElement("div");
@@ -50,6 +55,57 @@ document.body.appendChild(inventoryDisplay);
 function updateInventoryDisplay() {
     const pistolCount = inventory.pistolShots > 0 ? 1 : 0;
     inventoryDisplay.innerHTML = `<strong>INVENTORY</strong><br>1 GUN${selectedWeapon === "gun" ? "  &lt;" : ""}<br>2 TOASTER${selectedWeapon === "toaster" ? "  &lt;" : ""}<br>3 PISTOL: ${pistolCount}${selectedWeapon === "pistol" ? "  &lt;" : ""}`;
+}
+
+function updateAmmoDisplay() {
+    const ammo = selectedWeapon === "toaster"
+        ? `${inventory.toasterAmmo}/${inventory.toasterMaxAmmo}`
+        : selectedWeapon === "gun"
+            ? `${inventory.gunAmmo}/${inventory.gunMaxAmmo}`
+            : "1 shot";
+    ammoDisplay.textContent = `AMMO ${ammo}`;
+}
+
+function reloadWeapon() {
+    if (selectedWeapon === "gun") {
+        inventory.gunAmmo = inventory.gunMaxAmmo;
+    } else if (selectedWeapon === "toaster") {
+        inventory.toasterAmmo = inventory.toasterMaxAmmo;
+    }
+    updateAmmoDisplay();
+}
+
+function meleeAttack() {
+    if (meleeCooldown > 0) {
+        return;
+    }
+
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    let closestEnemy = null;
+    let closestDistance = 2.2;
+
+    for (const enemy of enemies) {
+        if (!enemy.alive) {
+            continue;
+        }
+
+        const offset = enemy.mesh.position.clone().sub(camera.position);
+        const distance = offset.length();
+        const facing = offset.normalize().dot(direction);
+
+        if (distance < closestDistance && facing > 0.45) {
+            closestEnemy = enemy;
+            closestDistance = distance;
+        }
+    }
+
+    if (closestEnemy) {
+        damageEnemy(closestEnemy, 35);
+    }
+
+    meleeCooldown = 0.45;
+    muzzleFlashUntil = performance.now() + 100;
 }
 
 function createPistolDrop(position) {
@@ -151,8 +207,21 @@ function updateAiming(delta) {
 function shoot() {
 
     if (selectedWeapon === "toaster") {
+        if (inventory.toasterAmmo <= 0) {
+            return;
+        }
+        inventory.toasterAmmo -= 1;
+        updateAmmoDisplay();
         shootToast();
         return;
+    }
+
+    if (selectedWeapon === "gun") {
+        if (inventory.gunAmmo <= 0) {
+            return;
+        }
+        inventory.gunAmmo -= 1;
+        updateAmmoDisplay();
     }
 
     if (selectedWeapon === "pistol") {
@@ -344,6 +413,25 @@ const weaponDisplay = document.createElement("div");
 weaponDisplay.id = "weapon-display";
 weaponDisplay.textContent = "1  GUN";
 document.body.appendChild(weaponDisplay);
+
+const ammoDisplay = document.createElement("div");
+ammoDisplay.id = "ammo-display";
+ammoDisplay.textContent = "AMMO 12/12";
+document.body.appendChild(ammoDisplay);
+
+const eventLog = document.createElement("div");
+eventLog.id = "event-log";
+eventLog.innerHTML = "<strong>COMBAT LOG</strong>";
+document.body.appendChild(eventLog);
+
+function logEvent(message) {
+    const entry = document.createElement("div");
+    entry.textContent = `> ${message}`;
+    eventLog.appendChild(entry);
+    while (eventLog.children.length > 5) {
+        eventLog.removeChild(eventLog.children[1]);
+    }
+}
 
 const staminaDisplay = document.createElement("div");
 staminaDisplay.id = "stamina-display";
@@ -1110,6 +1198,14 @@ document.addEventListener("keydown", (event) => {
         selectWeapon("pistol");
     }
 
+    if (event.code === "KeyR") {
+        reloadWeapon();
+    }
+
+    if (event.code === "KeyF") {
+        meleeAttack();
+    }
+
     //Crouch
 
     if (event.code === "ControlLeft") {
@@ -1825,6 +1921,7 @@ function gameLoop(time) {
     updateMovement(delta);
 
     updateGravity(delta);
+    meleeCooldown = Math.max(0, meleeCooldown - delta);
 
     updateFPS();
 
