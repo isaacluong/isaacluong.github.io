@@ -36,6 +36,9 @@ let muzzleFlashUntil = 0;
 let isAiming = false;
 let selectedWeapon = "gun";
 let meleeCooldown = 0;
+let reloadCooldown = 0;
+let pistolModel;
+let meleeHandModel;
 const toastProjectiles = [];
 const meatDrops = [];
 const pistolDrops = [];
@@ -67,12 +70,18 @@ function updateAmmoDisplay() {
 }
 
 function reloadWeapon() {
+    if (reloadCooldown > 0 || selectedWeapon === "pistol") {
+        return;
+    }
+
+    reloadCooldown = 1;
+    ammoDisplay.textContent = "RELOADING...";
+
     if (selectedWeapon === "gun") {
         inventory.gunAmmo = inventory.gunMaxAmmo;
     } else if (selectedWeapon === "toaster") {
         inventory.toasterAmmo = inventory.toasterMaxAmmo;
     }
-    updateAmmoDisplay();
 }
 
 function meleeAttack() {
@@ -106,6 +115,17 @@ function meleeAttack() {
 
     meleeCooldown = 0.45;
     muzzleFlashUntil = performance.now() + 100;
+
+    if (meleeHandModel) {
+        meleeHandModel.visible = true;
+        meleeHandModel.rotation.x = -0.8;
+        setTimeout(() => {
+            if (meleeHandModel) {
+                meleeHandModel.rotation.x = 0;
+                meleeHandModel.visible = false;
+            }
+        }, 180);
+    }
 }
 
 function createPistolDrop(position) {
@@ -178,6 +198,12 @@ function selectWeapon(weapon) {
     updateInventoryDisplay();
     if (typeof gunModel !== "undefined" && gunModel) {
         gunModel.visible = weapon === "gun";
+    }
+    if (pistolModel) {
+        pistolModel.visible = weapon === "pistol";
+    }
+    if (meleeHandModel) {
+        meleeHandModel.visible = false;
     }
 
     for (const enemy of enemies) {
@@ -463,6 +489,41 @@ function updateFPS() {
     }
 }
 const gunLoader = new THREE.GLTFLoader();
+
+function loadViewModel(path, position, scale, onLoad) {
+    gunLoader.load(path, (gltf) => {
+        const model = gltf.scene;
+        model.position.copy(position);
+        model.scale.set(scale, scale, scale);
+        model.traverse((object) => {
+            if (object.isMesh) {
+                object.castShadow = true;
+            }
+        });
+        viewModel.add(model);
+        onLoad(model);
+    }, undefined, (error) => console.error(`Failed to load ${path}:`, error));
+}
+
+loadViewModel(
+    "assets/models/pistol.glb",
+    new THREE.Vector3(0.3, -0.3, -0.7),
+    0.1,
+    (model) => {
+        pistolModel = model;
+        pistolModel.visible = false;
+    }
+);
+
+loadViewModel(
+    "assets/models/melee_hand.glb",
+    new THREE.Vector3(0.25, -0.35, -0.75),
+    0.14,
+    (model) => {
+        meleeHandModel = model;
+        meleeHandModel.visible = false;
+    }
+);
 
 gunLoader.load(
     "assets/models/gun.glb",
@@ -1922,6 +1983,10 @@ function gameLoop(time) {
 
     updateGravity(delta);
     meleeCooldown = Math.max(0, meleeCooldown - delta);
+    reloadCooldown = Math.max(0, reloadCooldown - delta);
+    if (reloadCooldown === 0) {
+        updateAmmoDisplay();
+    }
 
     updateFPS();
 
