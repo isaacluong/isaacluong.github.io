@@ -37,6 +37,41 @@ let isAiming = false;
 let selectedWeapon = "gun";
 const toastProjectiles = [];
 const meatDrops = [];
+const pistolDrops = [];
+const inventory = {
+    pistolShots: 0
+};
+
+const inventoryDisplay = document.createElement("div");
+inventoryDisplay.id = "inventory-display";
+inventoryDisplay.innerHTML = "<strong>INVENTORY</strong><br>1 GUN<br>2 TOASTER<br>3 PISTOL: 0";
+document.body.appendChild(inventoryDisplay);
+
+function updateInventoryDisplay() {
+    const pistolCount = inventory.pistolShots > 0 ? 1 : 0;
+    inventoryDisplay.innerHTML = `<strong>INVENTORY</strong><br>1 GUN${selectedWeapon === "gun" ? "  &lt;" : ""}<br>2 TOASTER${selectedWeapon === "toaster" ? "  &lt;" : ""}<br>3 PISTOL: ${pistolCount}${selectedWeapon === "pistol" ? "  &lt;" : ""}`;
+}
+
+function createPistolDrop(position) {
+    const pistol = new THREE.Group();
+    const grip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, 0.42, 0.18),
+        new THREE.MeshLambertMaterial({ color: 0x20252b })
+    );
+    const barrel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.48, 0.14, 0.16),
+        new THREE.MeshLambertMaterial({ color: 0x69747b, metalness: 0.7, roughness: 0.3 })
+    );
+    grip.position.y = 0.16;
+    barrel.position.set(0.22, 0.38, 0);
+    pistol.add(grip, barrel);
+    pistol.position.copy(position);
+    pistol.position.y = 0.2;
+    pistol.userData.life = 60;
+    pistol.rotation.y = Math.PI / 4;
+    scene.add(pistol);
+    pistolDrops.push(pistol);
+}
 
 function createMeatDrop(position) {
     const meat = new THREE.Group();
@@ -77,9 +112,14 @@ toasterModel.visible = false;
 viewModel.add(toasterModel);
 
 function selectWeapon(weapon) {
+    if (weapon === "pistol" && inventory.pistolShots < 1) {
+        return;
+    }
+
     selectedWeapon = weapon;
     toasterModel.visible = weapon === "toaster";
-    weaponDisplay.textContent = weapon === "toaster" ? "2  TOASTER" : "1  GUN";
+    weaponDisplay.textContent = weapon === "toaster" ? "2  TOASTER" : weapon === "pistol" ? "3  PISTOL" : "1  GUN";
+    updateInventoryDisplay();
     if (typeof gunModel !== "undefined" && gunModel) {
         gunModel.visible = weapon === "gun";
     }
@@ -113,6 +153,12 @@ function shoot() {
     if (selectedWeapon === "toaster") {
         shootToast();
         return;
+    }
+
+    if (selectedWeapon === "pistol") {
+        if (inventory.pistolShots < 1) {
+            inventory.pistolShots = 1;
+        }
     }
 
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -170,6 +216,7 @@ function shootToast() {
     camera.getWorldDirection(direction);
     toast.position.copy(camera.position).addScaledVector(direction, 0.8);
     toast.userData.velocity = direction.multiplyScalar(12);
+    toast.userData.damage = 35;
     toast.userData.life = 3;
     toast.rotation.set(Math.random(), Math.random(), Math.random());
     scene.add(toast);
@@ -201,7 +248,7 @@ function updateToastProjectiles(delta) {
         const toastHitWall = collidesWithWall(toast.position, 0.12);
 
         if (enemy) {
-            damageEnemy(enemy, 50);
+            damageEnemy(enemy, toast.userData.damage);
         }
 
         if (toastHitWall || toast.userData.life <= 0 || enemy) {
@@ -297,6 +344,11 @@ const weaponDisplay = document.createElement("div");
 weaponDisplay.id = "weapon-display";
 weaponDisplay.textContent = "1  GUN";
 document.body.appendChild(weaponDisplay);
+
+const staminaDisplay = document.createElement("div");
+staminaDisplay.id = "stamina-display";
+staminaDisplay.textContent = "STAMINA 100";
+document.body.appendChild(staminaDisplay);
 
 const damageFlash = document.createElement("div");
 damageFlash.id = "damage-flash";
@@ -572,6 +624,8 @@ const player = {
 
     maxHealth: 100,
     health: 100,
+    maxStamina: 100,
+    stamina: 100,
     damageCooldown: 0,
     lastDamageFlash: 0
 };
@@ -737,6 +791,7 @@ function spawnEnemy(x, z) {
     group.position.set(x, 0.1, z);
     group.userData.enemy = enemy;
     body.userData.enemy = enemy;
+    armor.userData.enemy = enemy;
     head.userData.enemy = enemy;
 
     scene.add(group);
@@ -823,6 +878,9 @@ function damageEnemy(enemy, amount) {
     if (enemy.health <= 0) {
         enemy.alive = false;
         createMeatDrop(enemy.mesh.position);
+        if (enemy.armored) {
+            createPistolDrop(enemy.mesh.position);
+        }
         scene.remove(enemy.mesh);
         enemy.speech.remove();
         scoreState.value += 100;
@@ -867,6 +925,35 @@ function disposeMeatDrop(meat) {
     });
 }
 
+function updatePistolDrops(delta, time) {
+    for (let index = pistolDrops.length - 1; index >= 0; index -= 1) {
+        const pistol = pistolDrops[index];
+        pistol.userData.life -= delta;
+        pistol.rotation.y += delta * 2;
+        pistol.position.y = 0.2 + Math.sin(time * 0.004 + index) * 0.08;
+
+        if (pistol.position.distanceTo(player.position) < 1.35) {
+            inventory.pistolShots += 1;
+            updateInventoryDisplay();
+            disposePistolDrop(pistol);
+            pistolDrops.splice(index, 1);
+        } else if (pistol.userData.life <= 0) {
+            disposePistolDrop(pistol);
+            pistolDrops.splice(index, 1);
+        }
+    }
+}
+
+function disposePistolDrop(pistol) {
+    scene.remove(pistol);
+    pistol.traverse((object) => {
+        if (object.isMesh) {
+            object.geometry.dispose();
+            object.material.dispose();
+        }
+    });
+}
+
 function takePlayerDamage(amount) {
     if (player.damageCooldown > 0) {
         return;
@@ -878,9 +965,12 @@ function takePlayerDamage(amount) {
     damageFlash.style.opacity = "0.5";
 
     if (player.health <= 0) {
+        const savedPistolShots = inventory.pistolShots;
         player.position.set(0, 0.1, 5);
         player.velocityY = 0;
         player.health = player.maxHealth;
+        inventory.pistolShots = savedPistolShots;
+        updateInventoryDisplay();
         player.damageCooldown = 1.2;
     }
 }
@@ -1014,6 +1104,10 @@ document.addEventListener("keydown", (event) => {
 
     if (event.code === "Digit2") {
         selectWeapon("toaster");
+    }
+
+    if (event.code === "Digit3") {
+        selectWeapon("pistol");
     }
 
     //Crouch
@@ -1269,6 +1363,17 @@ function updateMovement(delta) {
     if (keys["KeyA"]) input.x -= 1;
     if (keys["KeyD"]) input.x += 1;
 
+    const wantsToSprint = player.sprinting && !player.crouching && input.lengthSq() > 0;
+
+    if (wantsToSprint && player.stamina > 0) {
+        player.stamina = Math.max(0, player.stamina - 30 * delta);
+    } else {
+        player.stamina = Math.min(player.maxStamina, player.stamina + 20 * delta);
+        if (player.stamina <= 0) {
+            player.sprinting = false;
+        }
+    }
+
 
 
     if (input.lengthSq() > 0) {
@@ -1290,7 +1395,7 @@ function updateMovement(delta) {
         
         speed = player.crouchingSpeed;
 
-    } else if (player.sprinting) {
+    } else if (player.sprinting && player.stamina > 0) {
 
         speed = player.sprintingSpeed;
 
@@ -1728,11 +1833,13 @@ function gameLoop(time) {
     updateEnemyProjectiles(delta);
     updateToastProjectiles(delta);
         updateMeatDrops(delta, time);
+    updatePistolDrops(delta, time);
     updateAiming(delta);
 
     player.damageCooldown = Math.max(0, player.damageCooldown - delta);
     player.lastDamageFlash = Math.max(0, player.lastDamageFlash - delta);
     healthDisplay.textContent = `HEALTH ${Math.ceil(player.health)}`;
+    staminaDisplay.textContent = `STAMINA ${Math.ceil(player.stamina)}`;
     damageFlash.style.opacity = String(player.lastDamageFlash * 2.5);
 
     updateCrosshair(delta);
