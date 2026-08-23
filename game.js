@@ -1400,6 +1400,105 @@ document.body.addEventListener("contextmenu", (event) => {
     event.preventDefault();
 });
 
+function setupMobileControls() {
+    const mobileControls = document.getElementById("mobile-controls");
+    const joystick = document.getElementById("mobile-joystick");
+    const knob = document.getElementById("joystick-knob");
+    const lookArea = document.getElementById("mobile-look");
+
+    if (!mobileControls || !joystick || !knob || !lookArea) {
+        return;
+    }
+
+    const setJoystick = (touch) => {
+        const bounds = joystick.getBoundingClientRect();
+        const centerX = bounds.left + bounds.width / 2;
+        const centerY = bounds.top + bounds.height / 2;
+        const maxDistance = bounds.width * 0.34;
+        const offsetX = touch.clientX - centerX;
+        const offsetY = touch.clientY - centerY;
+        const distance = Math.min(maxDistance, Math.hypot(offsetX, offsetY));
+        const angle = Math.atan2(offsetY, offsetX);
+        const x = Math.cos(angle) * distance;
+        const y = Math.sin(angle) * distance;
+
+        knob.style.transform = `translate(${x}px, ${y}px)`;
+        keys.KeyA = x < -maxDistance * 0.2;
+        keys.KeyD = x > maxDistance * 0.2;
+        keys.KeyW = y < -maxDistance * 0.2;
+        keys.KeyS = y > maxDistance * 0.2;
+    };
+
+    const clearJoystick = () => {
+        knob.style.transform = "translate(0, 0)";
+        keys.KeyA = false;
+        keys.KeyD = false;
+        keys.KeyW = false;
+        keys.KeyS = false;
+    };
+
+    joystick.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+        setJoystick(event.changedTouches[0]);
+    }, { passive: false });
+    joystick.addEventListener("touchmove", (event) => {
+        event.preventDefault();
+        setJoystick(event.changedTouches[0]);
+    }, { passive: false });
+    joystick.addEventListener("touchend", clearJoystick);
+    joystick.addEventListener("touchcancel", clearJoystick);
+
+    let previousLook = null;
+    lookArea.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+        previousLook = event.changedTouches[0];
+    }, { passive: false });
+    lookArea.addEventListener("touchmove", (event) => {
+        event.preventDefault();
+        const touch = event.changedTouches[0];
+        if (previousLook) {
+            yaw -= (touch.clientX - previousLook.clientX) * mouseSensitivity * 2;
+            pitch -= (touch.clientY - previousLook.clientY) * mouseSensitivity * 2;
+            pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+            camera.rotation.order = "YXZ";
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+        previousLook = touch;
+    }, { passive: false });
+    lookArea.addEventListener("touchend", () => { previousLook = null; });
+
+    mobileControls.querySelectorAll("button").forEach((button) => {
+        const action = button.dataset.action;
+        const weapon = button.dataset.weapon;
+        const press = (event) => {
+            event.preventDefault();
+            if (weapon) {
+                selectWeapon(weapon);
+                return;
+            }
+            if (action === "shoot") shoot();
+            if (action === "melee") meleeAttack();
+            if (action === "reload") reloadWeapon();
+            if (action === "jump" && player.grounded && !player.crouching) {
+                player.velocityY = player.jumpForce;
+                player.grounded = false;
+            }
+            if (action === "crouch") player.crouching = true;
+            if (action === "aim") isAiming = true;
+        };
+        const release = (event) => {
+            event.preventDefault();
+            if (action === "crouch" && canStand()) player.crouching = false;
+            if (action === "aim") isAiming = false;
+        };
+        button.addEventListener("touchstart", press, { passive: false });
+        button.addEventListener("touchend", release, { passive: false });
+    });
+}
+
+setupMobileControls();
+
 
 let yaw = 0;
 let pitch = 0;
