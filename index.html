@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>My FPS</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -9,6 +10,23 @@
 
     <canvas id="crosshair"></canvas>
     <a class="controls-link" href="controls.html">CONTROLS</a>
+
+    <div id="mobile-controls">
+        <div id="mobile-joystick"><div id="joystick-knob"></div></div>
+        <div id="mobile-look"></div>
+        <div class="mobile-actions">
+            <button data-action="aim">AIM</button>
+            <button data-action="shoot">FIRE</button>
+            <button data-action="melee">MELEE</button>
+            <button data-action="jump">JUMP</button>
+            <button data-action="crouch">CROUCH</button>
+            <button data-action="reload">RELOAD</button>
+            <button data-weapon="gun">GUN</button>
+            <button data-weapon="toaster">TOAST</button>
+            <button data-weapon="pistol">PISTOL</button>
+            <button data-weapon="knife">KNIFE</button>
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
