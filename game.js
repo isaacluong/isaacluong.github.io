@@ -756,11 +756,16 @@ function loadMap(fileName) {
                 const size = bounds.getSize(new THREE.Vector3());
                 const largestDimension = Math.max(size.x, size.y, size.z);
                 const smallestDimension = Math.min(size.x, size.y, size.z);
+                const isFloor = size.y <= 1.1 && size.x > 20 && size.z > 20;
                 const isSphere =
                     /sphere|ball|orb/i.test(object.name) ||
                     (object.geometry.attributes.position.count > 50 &&
                         smallestDimension > 0 &&
                         largestDimension / smallestDimension < 1.2);
+
+                if (isFloor) {
+                    return;
+                }
 
                 if (isSphere) {
                     sphereColliders.push({
