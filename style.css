@@ -14,11 +14,43 @@ body {
 
     width: 100vw;
     height: 100vh;
-    
 
     pointer-events: none;
 
     z-index: 999999;
+}
+
+.controls-link {
+    position: fixed;
+    right: 24px;
+    top: 92px;
+    z-index: 10000;
+    padding: 8px 12px;
+    border: 1px solid #ffd166;
+    color: #ffd166;
+    background: rgba(5, 12, 15, 0.72);
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-decoration: none;
+}
+
+.controls-link:hover {
+    color: #071014;
+    background: #ffd166;
+}
+
+#map-selector {
+    position: fixed;
+    left: 24px;
+    top: 150px;
+    z-index: 10000;
+    padding: 8px 10px;
+    border: 1px solid #7dd3fc;
+    color: #e9f4f1;
+    background: rgba(5, 12, 15, 0.82);
+    font: bold 12px "Trebuchet MS", sans-serif;
+    letter-spacing: 1px;
 }
 
 body::after {
@@ -94,4 +126,90 @@ body::after {
 
 #inventory-display strong {
     color: #ffd166;
+}
+
+.controls-page {
+    min-height: 100vh;
+    overflow: auto;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle at 50% 20%, #18343a, #071014 68%);
+}
+
+.controls-panel {
+    width: min(560px, calc(100% - 40px));
+    padding: 32px;
+    border: 1px solid rgba(255, 209, 102, 0.55);
+    background: rgba(5, 12, 15, 0.86);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+}
+
+.eyebrow {
+    margin: 0 0 8px;
+    color: #8ff0c8;
+    font-size: 12px;
+    letter-spacing: 2px;
+}
+
+.controls-panel h1 {
+    margin: 0 0 24px;
+    color: #ffd166;
+    font-size: 32px;
+    letter-spacing: 2px;
+}
+
+.controls-list {
+    display: grid;
+    gap: 1px;
+    margin-bottom: 28px;
+    background: rgba(233, 244, 241, 0.16);
+}
+
+.controls-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 12px 14px;
+    background: #0c1b20;
+}
+
+.controls-list span {
+    color: #7dd3fc;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.controls-list strong {
+    color: #e9f4f1;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.back-link {
+    display: inline-block;
+    padding: 10px 14px;
+    border: 1px solid #ffd166;
+    color: #ffd166;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: #071014;
+    background: #ffd166;
+}
+
+@media (max-width: 520px) {
+    .controls-panel {
+        padding: 24px 18px;
+    }
+
+    .controls-list div {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+    }
 }
