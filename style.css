@@ -1,0 +1,61 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #071014;
+    color: #e9f4f1;
+    font-family: "Trebuchet MS", sans-serif;
+}
+
+#crosshair {
+    position: fixed;
+
+    left: 0;
+    top: 0;
+
+    width: 100vw;
+    height: 100vh;
+
+    pointer-events: none;
+
+    z-index: 999999;
+}
+
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 998;
+    box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.7);
+}
+
+#health-display,
+#weapon-display {
+    position: fixed;
+    bottom: 24px;
+    z-index: 9999;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 5px #000;
+}
+
+#health-display {
+    left: 24px;
+    color: #8ff0c8;
+}
+
+#weapon-display {
+    right: 24px;
+    color: #ffd166;
+}
+
+#damage-flash {
+    position: fixed;
+    inset: 0;
+    z-index: 997;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(circle, transparent 35%, rgba(255, 40, 40, 0.45));
+    transition: opacity 80ms linear;
+}
