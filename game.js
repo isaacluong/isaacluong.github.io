@@ -702,16 +702,30 @@ window.addEventListener("resize", () => {
 //animate();
 
 
-//Mmap
+// Map selector
 
 const mapLoader = new THREE.GLTFLoader();
+let activeMap = null;
+const mapSelector = document.createElement("select");
+mapSelector.id = "map-selector";
+mapSelector.innerHTML = "<option value='test_map.glb'>TEST MAP</option><option value='scene_map.glb'>SCENE MAP</option>";
+mapSelector.addEventListener("change", () => loadMap(mapSelector.value));
+document.body.appendChild(mapSelector);
 
-mapLoader.load(
-    "./assets/maps/test_map.glb",
+function loadMap(fileName) {
+    if (activeMap) {
+        scene.remove(activeMap);
+        wallBoxes.length = 0;
+        sphereColliders.length = 0;
+    }
 
-    (gltf) => {
+    mapLoader.load(
+        `./assets/maps/${fileName}`,
+
+        (gltf) => {
 
         const map = gltf.scene;
+        activeMap = map;
 
         scene.add(map);
 
@@ -766,17 +780,20 @@ mapLoader.load(
             wallBoxes.length + sphereColliders.length,
             "collision objects"
         );
-    },
+        },
 
-    undefined,
+        undefined,
 
-    (error) => {
-        console.error(
-            "Failed to load map:",
-            error
-        );
-    }
-);
+        (error) => {
+            console.error(
+                "Failed to load map:",
+                error
+            );
+        }
+    );
+}
+
+loadMap("test_map.glb");
 
 scene.add(camera);
 
