@@ -37,6 +37,7 @@ let isAiming = false;
 let selectedWeapon = "gun";
 let meleeCooldown = 0;
 let reloadCooldown = 0;
+let meleeSwingTime = 0;
 let pistolModel;
 let meleeHandModel;
 const toastProjectiles = [];
@@ -114,17 +115,32 @@ function meleeAttack() {
     }
 
     meleeCooldown = 0.45;
+    meleeSwingTime = 0.22;
     muzzleFlashUntil = performance.now() + 100;
 
     if (meleeHandModel) {
         meleeHandModel.visible = true;
-        meleeHandModel.rotation.x = -0.8;
-        setTimeout(() => {
-            if (meleeHandModel) {
-                meleeHandModel.rotation.x = 0;
-                meleeHandModel.visible = false;
-            }
-        }, 180);
+    }
+}
+
+function updateMeleeAnimation(delta) {
+    if (!meleeHandModel) {
+        return;
+    }
+
+    meleeSwingTime = Math.max(0, meleeSwingTime - delta);
+    meleeHandModel.visible = meleeSwingTime > 0;
+
+    if (meleeSwingTime > 0) {
+        const progress = 1 - meleeSwingTime / 0.22;
+        const swing = Math.sin(progress * Math.PI);
+        meleeHandModel.rotation.x = -0.35 - swing * 1.5;
+        meleeHandModel.rotation.y = -0.15 + swing * 0.35;
+        meleeHandModel.rotation.z = swing * 0.7;
+        meleeHandModel.position.z = -0.75 - swing * 0.3;
+    } else {
+        meleeHandModel.rotation.set(0, 0, 0);
+        meleeHandModel.position.z = -0.75;
     }
 }
 
@@ -1996,6 +2012,7 @@ function gameLoop(time) {
     updateToastProjectiles(delta);
         updateMeatDrops(delta, time);
     updatePistolDrops(delta, time);
+    updateMeleeAnimation(delta);
     updateAiming(delta);
 
     player.damageCooldown = Math.max(0, player.damageCooldown - delta);
