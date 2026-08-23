@@ -30,7 +30,8 @@ body::after {
 }
 
 #health-display,
-#weapon-display {
+#weapon-display,
+#stamina-display {
     position: fixed;
     bottom: 24px;
     z-index: 9999;
@@ -50,6 +51,13 @@ body::after {
     color: #ffd166;
 }
 
+#stamina-display {
+    left: 24px;
+    bottom: 50px;
+    color: #7dd3fc;
+    font-size: 14px;
+}
+
 #damage-flash {
     position: fixed;
     inset: 0;
@@ -58,4 +66,23 @@ body::after {
     opacity: 0;
     background: radial-gradient(circle, transparent 35%, rgba(255, 40, 40, 0.45));
     transition: opacity 80ms linear;
+}
+
+#inventory-display {
+    position: fixed;
+    left: 24px;
+    top: 24px;
+    z-index: 9999;
+    padding: 10px 14px;
+    border-left: 3px solid #ffd166;
+    background: rgba(5, 12, 15, 0.72);
+    color: #e9f4f1;
+    font-size: 13px;
+    line-height: 1.65;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 5px #000;
+}
+
+#inventory-display strong {
+    color: #ffd166;
 }
