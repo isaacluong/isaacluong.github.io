@@ -36,6 +36,28 @@ let muzzleFlashUntil = 0;
 let isAiming = false;
 let selectedWeapon = "gun";
 const toastProjectiles = [];
+const meatDrops = [];
+
+function createMeatDrop(position) {
+    const meat = new THREE.Group();
+    const steak = new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.3, 0.7),
+        new THREE.MeshLambertMaterial({ color: 0x9e2f2f })
+    );
+    const fat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.1, 0.24),
+        new THREE.MeshLambertMaterial({ color: 0xf0d39b })
+    );
+    steak.position.y = 0.25;
+    fat.position.set(0.12, 0.42, 0.08);
+    meat.add(steak, fat);
+    meat.position.copy(position);
+    meat.position.y = 0.15;
+    meat.userData.life = 45;
+    meat.userData.startY = meat.position.y;
+    scene.add(meat);
+    meatDrops.push(meat);
+}
 
 const toasterModel = new THREE.Group();
 const toasterLoader = new THREE.GLTFLoader();
@@ -800,6 +822,7 @@ function damageEnemy(enemy, amount) {
 
     if (enemy.health <= 0) {
         enemy.alive = false;
+        createMeatDrop(enemy.mesh.position);
         scene.remove(enemy.mesh);
         enemy.speech.remove();
         scoreState.value += 100;
@@ -814,6 +837,34 @@ function damageEnemy(enemy, amount) {
     }
 
     return false;
+}
+
+function updateMeatDrops(delta, time) {
+    for (let index = meatDrops.length - 1; index >= 0; index -= 1) {
+        const meat = meatDrops[index];
+        meat.userData.life -= delta;
+        meat.rotation.y += delta * 2;
+        meat.position.y = meat.userData.startY + Math.sin(time * 0.004 + index) * 0.08;
+
+        if (meat.position.distanceTo(player.position) < 1.35) {
+            player.health += 25;
+            disposeMeatDrop(meat);
+            meatDrops.splice(index, 1);
+        } else if (meat.userData.life <= 0) {
+            disposeMeatDrop(meat);
+            meatDrops.splice(index, 1);
+        }
+    }
+}
+
+function disposeMeatDrop(meat) {
+    scene.remove(meat);
+    meat.traverse((object) => {
+        if (object.isMesh) {
+            object.geometry.dispose();
+            object.material.dispose();
+        }
+    });
 }
 
 function takePlayerDamage(amount) {
@@ -1676,6 +1727,7 @@ function gameLoop(time) {
     updateEnemies(delta);
     updateEnemyProjectiles(delta);
     updateToastProjectiles(delta);
+        updateMeatDrops(delta, time);
     updateAiming(delta);
 
     player.damageCooldown = Math.max(0, player.damageCooldown - delta);
