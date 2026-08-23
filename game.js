@@ -592,21 +592,24 @@ function updateWaveDisplay() {
 }
 
 function getRandomSpawnPoint() {
-    const spawnPoints = [
-        [-8, -5],
-        [9, 7],
-        [-10, 8],
-        [7, -8],
-        [0, -12],
-        [12, 0],
-        [-12, 0],
-        [0, 12],
-        [6, 12],
-        [-6, -12]
-    ];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+        const x = THREE.MathUtils.randFloat(-14, 14);
+        const z = THREE.MathUtils.randFloat(-14, 14);
+        const candidate = new THREE.Vector3(x, 0.1, z);
+        const farFromPlayer = candidate.distanceTo(player.position) > 6;
+        const farFromEnemies = enemies.every((enemy) => {
+            return !enemy.alive || candidate.distanceTo(enemy.mesh.position) > 2;
+        });
 
-    const [x, z] = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
-    return [x, z];
+        if (farFromPlayer && farFromEnemies && !collidesWithWall(candidate, 0.5)) {
+            return [x, z];
+        }
+    }
+
+    return [
+        THREE.MathUtils.randFloat(-14, 14),
+        THREE.MathUtils.randFloat(-14, 14)
+    ];
 }
 
 function spawnEnemy(x, z) {
@@ -637,6 +640,16 @@ function spawnEnemy(x, z) {
     body.receiveShadow = true;
     group.add(body);
 
+    const armored = Math.random() < 0.1;
+    const armor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.98, 0.82, 0.12),
+        new THREE.MeshLambertMaterial({ color: 0x6f8790, metalness: 0.75, roughness: 0.3 })
+    );
+    armor.position.set(0, 0.95, 0.33);
+    armor.castShadow = true;
+    armor.visible = armored;
+    group.add(armor);
+
     const head = new THREE.Mesh(
         new THREE.SphereGeometry(0.35, 16, 16),
         new THREE.MeshLambertMaterial({ color: 0xd9d2c4 })
@@ -655,6 +668,8 @@ function spawnEnemy(x, z) {
         health: 100,
         alive: true,
         body: body,
+        armor: armor,
+        armored: armored,
         head: head,
         speech: speech,
         speechTime: 0
@@ -711,6 +726,7 @@ function spawnEnemy(x, z) {
 
 function setEnemyBaguetteMode(enemy, enabled) {
     enemy.body.visible = !enabled;
+    enemy.armor.visible = enemy.armored && !enabled;
     enemy.head.visible = !enabled;
     enemy.baguette.visible = enabled;
 }
@@ -779,7 +795,7 @@ function damageEnemy(enemy, amount) {
         return false;
     }
 
-    enemy.health -= amount;
+    enemy.health -= enemy.armored ? amount * 0.5 : amount;
     enemy.hitFlash = 0.14;
 
     if (enemy.health <= 0) {
