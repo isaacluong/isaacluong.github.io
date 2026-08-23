@@ -40,16 +40,35 @@ let reloadCooldown = 0;
 let meleeSwingTime = 0;
 let pistolModel;
 let meleeHandModel;
+let knifeModel;
 const toastProjectiles = [];
 const meatDrops = [];
 const pistolDrops = [];
 const inventory = {
     pistolShots: 0,
+    pistolDamage: 100,
     gunAmmo: 12,
     gunMaxAmmo: 12,
     toasterAmmo: 8,
     toasterMaxAmmo: 8
 };
+
+const knifeViewModel = new THREE.Group();
+const knifeBlade = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.62, 0.16),
+    new THREE.MeshLambertMaterial({ color: 0xd9e4e8, metalness: 0.9, roughness: 0.18 })
+);
+const knifeHandle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.42, 0.2),
+    new THREE.MeshLambertMaterial({ color: 0x252a30, roughness: 0.65 })
+);
+knifeBlade.position.set(0.35, -0.1, -0.78);
+knifeBlade.rotation.z = -0.25;
+knifeHandle.position.set(0.28, -0.58, -0.75);
+knifeHandle.rotation.z = -0.25;
+knifeViewModel.add(knifeBlade, knifeHandle);
+knifeViewModel.visible = false;
+viewModel.add(knifeViewModel);
 
 const inventoryDisplay = document.createElement("div");
 inventoryDisplay.id = "inventory-display";
@@ -58,7 +77,7 @@ document.body.appendChild(inventoryDisplay);
 
 function updateInventoryDisplay() {
     const pistolCount = inventory.pistolShots > 0 ? 1 : 0;
-    inventoryDisplay.innerHTML = `<strong>INVENTORY</strong><br>1 GUN${selectedWeapon === "gun" ? "  &lt;" : ""}<br>2 TOASTER${selectedWeapon === "toaster" ? "  &lt;" : ""}<br>3 PISTOL: ${pistolCount}${selectedWeapon === "pistol" ? "  &lt;" : ""}`;
+    inventoryDisplay.innerHTML = `<strong>INVENTORY</strong><br>1 GUN${selectedWeapon === "gun" ? "  &lt;" : ""}<br>2 TOASTER${selectedWeapon === "toaster" ? "  &lt;" : ""}<br>3 PISTOL: ${pistolCount}${selectedWeapon === "pistol" ? "  &lt;" : ""}<br>4 KNIFE${selectedWeapon === "knife" ? "  &lt;" : ""}`;
 }
 
 function updateAmmoDisplay() {
@@ -66,7 +85,9 @@ function updateAmmoDisplay() {
         ? `${inventory.toasterAmmo}/${inventory.toasterMaxAmmo}`
         : selectedWeapon === "gun"
             ? `${inventory.gunAmmo}/${inventory.gunMaxAmmo}`
-            : "1 shot";
+            : selectedWeapon === "knife"
+                ? "melee"
+                : "1 shot";
     ammoDisplay.textContent = `AMMO ${ammo}`;
 }
 
@@ -111,7 +132,7 @@ function meleeAttack() {
     }
 
     if (closestEnemy) {
-        damageEnemy(closestEnemy, 35);
+        damageEnemy(closestEnemy, selectedWeapon === "knife" ? 60 : 35);
     }
 
     meleeCooldown = 0.45;
@@ -288,7 +309,8 @@ function shoot() {
     const enemy = findEnemyFromObject(hit.object);
 
     if (enemy) {
-        const killed = damageEnemy(enemy, 35);
+        const damage = selectedWeapon === "pistol" ? inventory.pistolDamage : 35;
+        const killed = damageEnemy(enemy, damage);
 
         if (killed) {
             console.log("Enemy eliminated");
@@ -523,10 +545,11 @@ function loadViewModel(path, position, scale, onLoad) {
 
 loadViewModel(
     "assets/models/pistol.glb",
-    new THREE.Vector3(0.3, -0.3, -0.7),
+    new THREE.Vector3(-0.3, -0.3, -0.7),
     0.1,
     (model) => {
         pistolModel = model;
+        pistolModel.rotation.y = Math.PI / 2;
         pistolModel.visible = false;
     }
 );
@@ -881,7 +904,7 @@ function spawnEnemy(x, z) {
     body.receiveShadow = true;
     group.add(body);
 
-    const armored = Math.random() < 0.1;
+    const armored = Math.random() < 0.05;
     const armor = new THREE.Mesh(
         new THREE.BoxGeometry(0.98, 0.82, 0.12),
         new THREE.MeshLambertMaterial({ color: 0x6f8790, metalness: 0.75, roughness: 0.3 })
