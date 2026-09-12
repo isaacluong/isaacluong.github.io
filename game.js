@@ -33,265 +33,8 @@ camera.add(viewModel);
 const raycaster = new THREE.Raycaster();
 const shootDirection = new THREE.Vector3();
 let muzzleFlashUntil = 0;
-let isAiming = false;
-let selectedWeapon = "gun";
-let meleeCooldown = 0;
-let reloadCooldown = 0;
-let meleeSwingTime = 0;
-let pistolModel;
-let meleeHandModel;
-let knifeModel;
-const toastProjectiles = [];
-const meatDrops = [];
-const pistolDrops = [];
-const inventory = {
-    pistolShots: 0,
-    pistolDamage: 100,
-    gunAmmo: 12,
-    gunMaxAmmo: 12,
-    toasterAmmo: 8,
-    toasterMaxAmmo: 8
-};
-
-const knifeViewModel = new THREE.Group();
-const knifeBlade = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.62, 0.16),
-    new THREE.MeshLambertMaterial({ color: 0xd9e4e8, metalness: 0.9, roughness: 0.18 })
-);
-const knifeHandle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 0.42, 0.2),
-    new THREE.MeshLambertMaterial({ color: 0x252a30, roughness: 0.65 })
-);
-knifeBlade.position.set(0.35, -0.1, -0.78);
-knifeBlade.rotation.z = -0.25;
-knifeHandle.position.set(0.28, -0.58, -0.75);
-knifeHandle.rotation.z = -0.25;
-knifeViewModel.add(knifeBlade, knifeHandle);
-knifeViewModel.visible = false;
-viewModel.add(knifeViewModel);
-
-const inventoryDisplay = document.createElement("div");
-inventoryDisplay.id = "inventory-display";
-inventoryDisplay.innerHTML = "<strong>INVENTORY</strong><br>1 GUN<br>2 TOASTER<br>3 PISTOL: 0";
-document.body.appendChild(inventoryDisplay);
-
-function updateInventoryDisplay() {
-    const pistolCount = inventory.pistolShots > 0 ? 1 : 0;
-    inventoryDisplay.innerHTML = `<strong>INVENTORY</strong><br>1 GUN${selectedWeapon === "gun" ? "  &lt;" : ""}<br>2 TOASTER${selectedWeapon === "toaster" ? "  &lt;" : ""}<br>3 PISTOL: ${pistolCount}${selectedWeapon === "pistol" ? "  &lt;" : ""}<br>4 KNIFE${selectedWeapon === "knife" ? "  &lt;" : ""}`;
-}
-
-function updateAmmoDisplay() {
-    const ammo = selectedWeapon === "toaster"
-        ? `${inventory.toasterAmmo}/${inventory.toasterMaxAmmo}`
-        : selectedWeapon === "gun"
-            ? `${inventory.gunAmmo}/${inventory.gunMaxAmmo}`
-            : selectedWeapon === "knife"
-                ? "melee"
-                : "1 shot";
-    ammoDisplay.textContent = `AMMO ${ammo}`;
-}
-
-function reloadWeapon() {
-    if (reloadCooldown > 0 || selectedWeapon === "pistol") {
-        return;
-    }
-
-    reloadCooldown = 1;
-    ammoDisplay.textContent = "RELOADING...";
-
-    if (selectedWeapon === "gun") {
-        inventory.gunAmmo = inventory.gunMaxAmmo;
-    } else if (selectedWeapon === "toaster") {
-        inventory.toasterAmmo = inventory.toasterMaxAmmo;
-    }
-}
-
-function meleeAttack() {
-    if (meleeCooldown > 0) {
-        return;
-    }
-
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-    let closestEnemy = null;
-    let closestDistance = 2.2;
-
-    for (const enemy of enemies) {
-        if (!enemy.alive) {
-            continue;
-        }
-
-        const offset = enemy.mesh.position.clone().sub(camera.position);
-        const distance = offset.length();
-        const facing = offset.normalize().dot(direction);
-
-        if (distance < closestDistance && facing > 0.45) {
-            closestEnemy = enemy;
-            closestDistance = distance;
-        }
-    }
-
-    if (closestEnemy) {
-        damageEnemy(closestEnemy, selectedWeapon === "knife" ? 60 : 35);
-    }
-
-    meleeCooldown = 0.45;
-    meleeSwingTime = 0.22;
-    muzzleFlashUntil = performance.now() + 100;
-
-    if (meleeHandModel) {
-        meleeHandModel.visible = true;
-    }
-}
-
-function updateMeleeAnimation(delta) {
-    if (!meleeHandModel) {
-        return;
-    }
-
-    meleeSwingTime = Math.max(0, meleeSwingTime - delta);
-    meleeHandModel.visible = meleeSwingTime > 0;
-
-    if (meleeSwingTime > 0) {
-        const progress = 1 - meleeSwingTime / 0.22;
-        const swing = Math.sin(progress * Math.PI);
-        meleeHandModel.rotation.x = -0.35 - swing * 1.5;
-        meleeHandModel.rotation.y = -0.15 + swing * 0.35;
-        meleeHandModel.rotation.z = swing * 0.7;
-        meleeHandModel.position.z = -0.75 - swing * 0.3;
-    } else {
-        meleeHandModel.rotation.set(0, 0, 0);
-        meleeHandModel.position.z = -0.75;
-    }
-}
-
-function createPistolDrop(position) {
-    const pistol = new THREE.Group();
-    const grip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 0.42, 0.18),
-        new THREE.MeshLambertMaterial({ color: 0x20252b })
-    );
-    const barrel = new THREE.Mesh(
-        new THREE.BoxGeometry(0.48, 0.14, 0.16),
-        new THREE.MeshLambertMaterial({ color: 0x69747b, metalness: 0.7, roughness: 0.3 })
-    );
-    grip.position.y = 0.16;
-    barrel.position.set(0.22, 0.38, 0);
-    pistol.add(grip, barrel);
-    pistol.position.copy(position);
-    pistol.position.y = 0.2;
-    pistol.userData.life = 60;
-    pistol.rotation.y = Math.PI / 4;
-    scene.add(pistol);
-    pistolDrops.push(pistol);
-}
-
-function createMeatDrop(position) {
-    const meat = new THREE.Group();
-    const steak = new THREE.Mesh(
-        new THREE.BoxGeometry(0.55, 0.3, 0.7),
-        new THREE.MeshLambertMaterial({ color: 0x9e2f2f })
-    );
-    const fat = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.1, 0.24),
-        new THREE.MeshLambertMaterial({ color: 0xf0d39b })
-    );
-    steak.position.y = 0.25;
-    fat.position.set(0.12, 0.42, 0.08);
-    meat.add(steak, fat);
-    meat.position.copy(position);
-    meat.position.y = 0.15;
-    meat.userData.life = 45;
-    meat.userData.startY = meat.position.y;
-    scene.add(meat);
-    meatDrops.push(meat);
-}
-
-const toasterModel = new THREE.Group();
-const toasterLoader = new THREE.GLTFLoader();
-toasterLoader.load("assets/models/toaster.glb", (gltf) => {
-    const model = gltf.scene;
-    model.scale.set(0.32, 0.32, 0.32);
-    model.position.set(0.3, -0.42, -0.7);
-    model.traverse((object) => {
-        if (object.isMesh) {
-            object.castShadow = true;
-            object.receiveShadow = true;
-        }
-    });
-    toasterModel.add(model);
-}, undefined, (error) => console.error("Toaster GLB failed to load:", error));
-toasterModel.visible = false;
-viewModel.add(toasterModel);
-
-function selectWeapon(weapon) {
-    if (weapon === "pistol" && inventory.pistolShots < 1) {
-        return;
-    }
-
-    selectedWeapon = weapon;
-    toasterModel.visible = weapon === "toaster";
-    weaponDisplay.textContent = weapon === "toaster" ? "2  TOASTER" : weapon === "pistol" ? "3  PISTOL" : "1  GUN";
-    updateInventoryDisplay();
-    if (typeof gunModel !== "undefined" && gunModel) {
-        gunModel.visible = weapon === "gun";
-    }
-    if (pistolModel) {
-        pistolModel.visible = weapon === "pistol";
-    }
-    if (meleeHandModel) {
-        meleeHandModel.visible = false;
-    }
-
-    for (const enemy of enemies) {
-        if (enemy.alive) {
-            setEnemyBaguetteMode(enemy, weapon === "toaster");
-        }
-    }
-}
-
-function updateAiming(delta) {
-    const aimAmount = isAiming ? 1 : 0;
-    const smoothing = 1 - Math.exp(-12 * delta);
-
-    viewModel.position.lerp(
-        new THREE.Vector3(-0.12 * aimAmount, 0.08 * aimAmount, 0),
-        smoothing
-    );
-
-    camera.fov = THREE.MathUtils.lerp(
-        camera.fov,
-        isAiming ? 55 : 75,
-        smoothing
-    );
-    camera.updateProjectionMatrix();
-}
 
 function shoot() {
-
-    if (selectedWeapon === "toaster") {
-        if (inventory.toasterAmmo <= 0) {
-            return;
-        }
-        inventory.toasterAmmo -= 1;
-        updateAmmoDisplay();
-        shootToast();
-        return;
-    }
-
-    if (selectedWeapon === "gun") {
-        if (inventory.gunAmmo <= 0) {
-            return;
-        }
-        inventory.gunAmmo -= 1;
-        updateAmmoDisplay();
-    }
-
-    if (selectedWeapon === "pistol") {
-        if (inventory.pistolShots < 1) {
-            inventory.pistolShots = 1;
-        }
-    }
 
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
@@ -304,17 +47,6 @@ function shoot() {
 
     if (!hit) {
         return;
-    }
-
-    const enemy = findEnemyFromObject(hit.object);
-
-    if (enemy) {
-        const damage = selectedWeapon === "pistol" ? inventory.pistolDamage : 35;
-        const killed = damageEnemy(enemy, damage);
-
-        if (killed) {
-            console.log("Enemy eliminated");
-        }
     }
 
     const impact = new THREE.Mesh(
@@ -330,65 +62,6 @@ function shoot() {
         impact.geometry.dispose();
         impact.material.dispose();
     }, 180);
-}
-
-function shootToast() {
-    const toast = new THREE.Group();
-    const crust = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, 0.38, 0.09),
-        new THREE.MeshLambertMaterial({ color: 0x9b4f20, emissive: 0x241006 })
-    );
-    const center = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.29, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0xf3bd68, emissive: 0x3a1800 })
-    );
-    center.position.z = 0.01;
-    toast.add(crust, center);
-    const direction = new THREE.Vector3();
-
-    camera.getWorldDirection(direction);
-    toast.position.copy(camera.position).addScaledVector(direction, 0.8);
-    toast.userData.velocity = direction.multiplyScalar(12);
-    toast.userData.damage = 35;
-    toast.userData.life = 3;
-    toast.rotation.set(Math.random(), Math.random(), Math.random());
-    scene.add(toast);
-    toastProjectiles.push(toast);
-    muzzleFlashUntil = performance.now() + 120;
-}
-
-function disposeToast(toast) {
-    scene.remove(toast);
-    toast.traverse((object) => {
-        if (object.isMesh) {
-            object.geometry.dispose();
-            object.material.dispose();
-        }
-    });
-}
-
-function updateToastProjectiles(delta) {
-    for (let index = toastProjectiles.length - 1; index >= 0; index -= 1) {
-        const toast = toastProjectiles[index];
-        toast.position.addScaledVector(toast.userData.velocity, delta);
-        toast.rotation.x += delta * 8;
-        toast.rotation.z += delta * 5;
-        toast.userData.life -= delta;
-
-        const enemy = enemies.find((active) => {
-            return active.alive && toast.position.distanceTo(active.mesh.position) < 1.4;
-        });
-        const toastHitWall = collidesWithWall(toast.position, 0.12);
-
-        if (enemy) {
-            damageEnemy(enemy, toast.userData.damage);
-        }
-
-        if (toastHitWall || toast.userData.life <= 0 || enemy) {
-            disposeToast(toast);
-            toastProjectiles.splice(index, 1);
-        }
-    }
 }
 
 const renderer = new THREE.WebGLRenderer({
@@ -436,75 +109,6 @@ fpsDisplay.textContent = "FPS: --";
 
 document.body.appendChild(fpsDisplay);
 
-const scoreDisplay = document.createElement("div");
-scoreDisplay.style.position = "fixed";
-scoreDisplay.style.top = "35px";
-scoreDisplay.style.right = "10px";
-scoreDisplay.style.color = "#ffffff";
-scoreDisplay.style.fontFamily = "Arial";
-scoreDisplay.style.fontSize = "14px";
-scoreDisplay.style.fontWeight = "bold";
-scoreDisplay.style.padding = "5px 8px";
-scoreDisplay.style.borderRadius = "4px";
-scoreDisplay.style.zIndex = "9999";
-scoreDisplay.style.pointerEvents = "none";
-scoreDisplay.textContent = "Score: 0";
-document.body.appendChild(scoreDisplay);
-
-const scoreBackendUrl = "http://127.0.0.1:8000/score";
-
-const waveDisplay = document.createElement("div");
-waveDisplay.style.position = "fixed";
-waveDisplay.style.top = "60px";
-waveDisplay.style.right = "10px";
-waveDisplay.style.color = "#ffd166";
-waveDisplay.style.fontFamily = "Arial";
-waveDisplay.style.fontSize = "14px";
-waveDisplay.style.fontWeight = "bold";
-waveDisplay.style.padding = "5px 8px";
-waveDisplay.style.borderRadius = "4px";
-waveDisplay.style.zIndex = "9999";
-waveDisplay.style.pointerEvents = "none";
-waveDisplay.textContent = "Wave: 0";
-document.body.appendChild(waveDisplay);
-
-const healthDisplay = document.createElement("div");
-healthDisplay.id = "health-display";
-healthDisplay.textContent = "HEALTH 100";
-document.body.appendChild(healthDisplay);
-
-const weaponDisplay = document.createElement("div");
-weaponDisplay.id = "weapon-display";
-weaponDisplay.textContent = "1  GUN";
-document.body.appendChild(weaponDisplay);
-
-const ammoDisplay = document.createElement("div");
-ammoDisplay.id = "ammo-display";
-ammoDisplay.textContent = "AMMO 12/12";
-document.body.appendChild(ammoDisplay);
-
-const eventLog = document.createElement("div");
-eventLog.id = "event-log";
-eventLog.innerHTML = "<strong>COMBAT LOG</strong>";
-document.body.appendChild(eventLog);
-
-function logEvent(message) {
-    const entry = document.createElement("div");
-    entry.textContent = `> ${message}`;
-    eventLog.appendChild(entry);
-    while (eventLog.children.length > 5) {
-        eventLog.removeChild(eventLog.children[1]);
-    }
-}
-
-const staminaDisplay = document.createElement("div");
-staminaDisplay.id = "stamina-display";
-staminaDisplay.textContent = "STAMINA 100";
-document.body.appendChild(staminaDisplay);
-
-const damageFlash = document.createElement("div");
-damageFlash.id = "damage-flash";
-document.body.appendChild(damageFlash);
 
 // fps
 let frames = 0;
@@ -527,42 +131,6 @@ function updateFPS() {
     }
 }
 const gunLoader = new THREE.GLTFLoader();
-
-function loadViewModel(path, position, scale, onLoad) {
-    gunLoader.load(path, (gltf) => {
-        const model = gltf.scene;
-        model.position.copy(position);
-        model.scale.set(scale, scale, scale);
-        model.traverse((object) => {
-            if (object.isMesh) {
-                object.castShadow = true;
-            }
-        });
-        viewModel.add(model);
-        onLoad(model);
-    }, undefined, (error) => console.error(`Failed to load ${path}:`, error));
-}
-
-loadViewModel(
-    "assets/models/pistol.glb",
-    new THREE.Vector3(-0.3, -0.3, -0.7),
-    0.1,
-    (model) => {
-        pistolModel = model;
-        pistolModel.rotation.y = Math.PI / 2;
-        pistolModel.visible = false;
-    }
-);
-
-loadViewModel(
-    "assets/models/melee_hand.glb",
-    new THREE.Vector3(0.25, -0.35, -0.75),
-    0.14,
-    (model) => {
-        meleeHandModel = model;
-        meleeHandModel.visible = false;
-    }
-);
 
 gunLoader.load(
     "assets/models/gun.glb",
@@ -638,16 +206,6 @@ sun.shadow.normalBias = 0.02;
 
 scene.add(sun);
 
-const sunMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(6, 24, 16),
-    new THREE.MeshBasicMaterial({
-        color: 0xffe28a
-    })
-);
-
-sunMesh.position.set(35, 30, -45);
-scene.add(sunMesh);
-
 const hemiLight = new THREE.HemisphereLight(
     0xbfd8ff, // Sky
     0x332211, // Ground
@@ -702,30 +260,16 @@ window.addEventListener("resize", () => {
 //animate();
 
 
-// Map selector
+//Mmap
 
 const mapLoader = new THREE.GLTFLoader();
-let activeMap = null;
-const mapSelector = document.createElement("select");
-mapSelector.id = "map-selector";
-mapSelector.innerHTML = "<option value='test_map.glb'>TEST MAP</option><option value='scene_map.glb'>SCENE MAP</option>";
-mapSelector.addEventListener("change", () => loadMap(mapSelector.value));
-document.body.appendChild(mapSelector);
 
-function loadMap(fileName) {
-    if (activeMap) {
-        scene.remove(activeMap);
-        wallBoxes.length = 0;
-        sphereColliders.length = 0;
-    }
+mapLoader.load(
+    "./assets/maps/test_map.glb",
 
-    mapLoader.load(
-        `./assets/maps/${fileName}`,
-
-        (gltf) => {
+    (gltf) => {
 
         const map = gltf.scene;
-        activeMap = map;
 
         scene.add(map);
 
@@ -756,17 +300,11 @@ function loadMap(fileName) {
                 const size = bounds.getSize(new THREE.Vector3());
                 const largestDimension = Math.max(size.x, size.y, size.z);
                 const smallestDimension = Math.min(size.x, size.y, size.z);
-                const isFloor = size.y <= 1.1 && size.x > 20 && size.z > 20;
-                const isCombinedSceneMap = fileName === "scene_map.glb" && size.x > 20 && size.z > 20;
                 const isSphere =
                     /sphere|ball|orb/i.test(object.name) ||
                     (object.geometry.attributes.position.count > 50 &&
                         smallestDimension > 0 &&
                         largestDimension / smallestDimension < 1.2);
-
-                if (isFloor || isCombinedSceneMap) {
-                    return;
-                }
 
                 if (isSphere) {
                     sphereColliders.push({
@@ -786,20 +324,17 @@ function loadMap(fileName) {
             wallBoxes.length + sphereColliders.length,
             "collision objects"
         );
-        },
+    },
 
-        undefined,
+    undefined,
 
-        (error) => {
-            console.error(
-                "Failed to load map:",
-                error
-            );
-        }
-    );
-}
-
-loadMap("test_map.glb");
+    (error) => {
+        console.error(
+            "Failed to load map:",
+            error
+        );
+    }
+);
 
 scene.add(camera);
 
@@ -808,11 +343,11 @@ scene.add(camera);
 const player = {
     position: new THREE.Vector3(0, 0, 5),
 
-    standingHeight: 1.35,
-    crouchingHeight: 0.9,
-    height: 1.35,
+    standingHeight: 1.7,
+    crouchingHeight: 1.1,
+    height: 1.7,
 
-    radius: 0.45,
+    radius: 0.3,
 
     standingSpeed: 5,
     crouchingSpeed: 2.5,
@@ -831,424 +366,8 @@ const player = {
     moveVelocity: new THREE.Vector3(),
 
     acceleration: 25,
-    deceleration: 30,
-
-    maxHealth: 100,
-    health: 100,
-    maxStamina: 100,
-    stamina: 100,
-    damageCooldown: 0,
-    lastDamageFlash: 0
+    deceleration: 30
 };
-
-const enemies = [];
-const enemyProjectiles = [];
-let enemyCounter = 0;
-const scoreState = {
-    value: 0
-};
-
-const waveState = {
-    current: 0,
-    enemiesRemaining: 0,
-    spawnDelay: 0,
-    nextWaveDelay: 0
-};
-
-function updateScoreDisplay() {
-    scoreDisplay.textContent = `Score: ${scoreState.value}`;
-}
-
-function saveScore() {
-    fetch(scoreBackendUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            player: "Player",
-            score: scoreState.value
-        })
-    }).catch(() => {
-        console.warn("Score server is unavailable");
-    });
-}
-
-function updateWaveDisplay() {
-    waveDisplay.textContent = `Wave: ${waveState.current}`;
-}
-
-function getRandomSpawnPoint() {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-        const x = THREE.MathUtils.randFloat(-14, 14);
-        const z = THREE.MathUtils.randFloat(-14, 14);
-        const candidate = new THREE.Vector3(x, 0.1, z);
-        const farFromPlayer = candidate.distanceTo(player.position) > 6;
-        const farFromEnemies = enemies.every((enemy) => {
-            return !enemy.alive || candidate.distanceTo(enemy.mesh.position) > 2;
-        });
-
-        if (farFromPlayer && farFromEnemies && !collidesWithWall(candidate, 0.5)) {
-            return [x, z];
-        }
-    }
-
-    return [
-        THREE.MathUtils.randFloat(-14, 14),
-        THREE.MathUtils.randFloat(-14, 14)
-    ];
-}
-
-function spawnEnemy(x, z) {
-    const group = new THREE.Group();
-
-    const speech = document.createElement("div");
-    speech.textContent = "Ich weiß nicht";
-    speech.style.position = "fixed";
-    speech.style.padding = "4px 7px";
-    speech.style.background = "rgba(255, 255, 255, 0.9)";
-    speech.style.color = "#222222";
-    speech.style.borderRadius = "4px";
-    speech.style.fontFamily = "Arial";
-    speech.style.fontSize = "13px";
-    speech.style.fontWeight = "bold";
-    speech.style.pointerEvents = "none";
-    speech.style.zIndex = "1000";
-    speech.style.display = "none";
-    document.body.appendChild(speech);
-
-    const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x8b1e1e });
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, 1.2, 0.6),
-        bodyMaterial
-    );
-    body.position.y = 0.9;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
-
-    const armored = Math.random() < 0.05;
-    const armor = new THREE.Mesh(
-        new THREE.BoxGeometry(0.98, 0.82, 0.12),
-        new THREE.MeshLambertMaterial({ color: 0x6f8790, metalness: 0.75, roughness: 0.3 })
-    );
-    armor.position.set(0, 0.95, 0.33);
-    armor.castShadow = true;
-    armor.visible = armored;
-    group.add(armor);
-
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35, 16, 16),
-        new THREE.MeshLambertMaterial({ color: 0xd9d2c4 })
-    );
-    head.position.y = 1.8;
-    head.castShadow = true;
-    group.add(head);
-
-    const enemy = {
-        id: enemyCounter++,
-        mesh: group,
-        radius: 0.5,
-        speed: 1.8,
-        attackCooldown: 0,
-        hitFlash: 0,
-        health: 100,
-        alive: true,
-        body: body,
-        armor: armor,
-        armored: armored,
-        head: head,
-        speech: speech,
-        speechTime: 0
-    };
-
-    const baguette = new THREE.Group();
-    const bread = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.27, 0.2, 1.7, 16),
-        new THREE.MeshLambertMaterial({ color: 0xc8782e })
-    );
-    bread.rotation.z = Math.PI / 2;
-    bread.castShadow = true;
-    baguette.add(bread);
-
-    const breadEndMaterial = new THREE.MeshLambertMaterial({ color: 0xe5a04b });
-    for (const x of [-0.88, 0.88]) {
-        const end = new THREE.Mesh(
-            new THREE.SphereGeometry(0.21, 12, 8),
-            breadEndMaterial
-        );
-        end.position.x = x;
-        end.castShadow = true;
-        baguette.add(end);
-    }
-
-    const scoringMaterial = new THREE.MeshLambertMaterial({ color: 0x8f431b });
-    for (const x of [-0.48, -0.16, 0.16, 0.48]) {
-        const scoring = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.04, 0.34),
-            scoringMaterial
-        );
-        scoring.position.set(x, 0.23, 0);
-        scoring.rotation.z = -0.35;
-        baguette.add(scoring);
-    }
-
-    baguette.position.y = 1.05;
-    baguette.castShadow = true;
-    baguette.visible = false;
-    group.add(baguette);
-    enemy.baguette = baguette;
-
-    group.position.set(x, 0.1, z);
-    group.userData.enemy = enemy;
-    body.userData.enemy = enemy;
-    armor.userData.enemy = enemy;
-    head.userData.enemy = enemy;
-
-    scene.add(group);
-    enemies.push(enemy);
-    setEnemyBaguetteMode(enemy, selectedWeapon === "toaster");
-
-    return enemy;
-}
-
-function setEnemyBaguetteMode(enemy, enabled) {
-    enemy.body.visible = !enabled;
-    enemy.armor.visible = enemy.armored && !enabled;
-    enemy.head.visible = !enabled;
-    enemy.baguette.visible = enabled;
-}
-
-function beginWave(number) {
-    waveState.current = number;
-    waveState.enemiesRemaining = 3 + number * 2;
-    waveState.spawnDelay = 0.5;
-    waveState.nextWaveDelay = 0;
-    updateWaveDisplay();
-}
-
-function updateWaves(delta) {
-    if (waveState.current === 0) {
-        beginWave(1);
-        return;
-    }
-
-    if (waveState.enemiesRemaining > 0) {
-        waveState.spawnDelay -= delta;
-
-        if (waveState.spawnDelay <= 0) {
-            const [x, z] = getRandomSpawnPoint();
-            spawnEnemy(x, z);
-            waveState.enemiesRemaining -= 1;
-            waveState.spawnDelay = Math.max(0.35, 1.1 - waveState.current * 0.08);
-        }
-
-        return;
-    }
-
-    const aliveEnemies = enemies.filter((enemy) => enemy.alive).length;
-
-    if (aliveEnemies === 0) {
-        if (waveState.nextWaveDelay === 0) {
-            waveState.nextWaveDelay = 1.5;
-        }
-
-        waveState.nextWaveDelay -= delta;
-
-        if (waveState.nextWaveDelay <= 0) {
-            beginWave(waveState.current + 1);
-        }
-    }
-}
-
-function spawnInitialEnemies() {
-    beginWave(1);
-}
-
-function findEnemyFromObject(object) {
-    let current = object;
-
-    while (current) {
-        if (current.userData && current.userData.enemy && current.userData.enemy.alive) {
-            return current.userData.enemy;
-        }
-        current = current.parent;
-    }
-
-    return null;
-}
-
-function damageEnemy(enemy, amount) {
-    if (!enemy || !enemy.alive) {
-        return false;
-    }
-
-    enemy.health -= enemy.armored ? amount * 0.5 : amount;
-    enemy.hitFlash = 0.14;
-
-    if (enemy.health <= 0) {
-        enemy.alive = false;
-        createMeatDrop(enemy.mesh.position);
-        if (enemy.armored) {
-            createPistolDrop(enemy.mesh.position);
-        }
-        scene.remove(enemy.mesh);
-        enemy.speech.remove();
-        scoreState.value += 100;
-        updateScoreDisplay();
-        saveScore();
-
-        if (waveState.enemiesRemaining === 0 && enemies.filter((active) => active.alive).length === 0) {
-            waveState.nextWaveDelay = 1.5;
-        }
-
-        return true;
-    }
-
-    return false;
-}
-
-function updateMeatDrops(delta, time) {
-    for (let index = meatDrops.length - 1; index >= 0; index -= 1) {
-        const meat = meatDrops[index];
-        meat.userData.life -= delta;
-        meat.rotation.y += delta * 2;
-        meat.position.y = meat.userData.startY + Math.sin(time * 0.004 + index) * 0.08;
-
-        if (meat.position.distanceTo(player.position) < 1.35) {
-            player.health += 25;
-            disposeMeatDrop(meat);
-            meatDrops.splice(index, 1);
-        } else if (meat.userData.life <= 0) {
-            disposeMeatDrop(meat);
-            meatDrops.splice(index, 1);
-        }
-    }
-}
-
-function disposeMeatDrop(meat) {
-    scene.remove(meat);
-    meat.traverse((object) => {
-        if (object.isMesh) {
-            object.geometry.dispose();
-            object.material.dispose();
-        }
-    });
-}
-
-function updatePistolDrops(delta, time) {
-    for (let index = pistolDrops.length - 1; index >= 0; index -= 1) {
-        const pistol = pistolDrops[index];
-        pistol.userData.life -= delta;
-        pistol.rotation.y += delta * 2;
-        pistol.position.y = 0.2 + Math.sin(time * 0.004 + index) * 0.08;
-
-        if (pistol.position.distanceTo(player.position) < 1.35) {
-            inventory.pistolShots += 1;
-            updateInventoryDisplay();
-            disposePistolDrop(pistol);
-            pistolDrops.splice(index, 1);
-        } else if (pistol.userData.life <= 0) {
-            disposePistolDrop(pistol);
-            pistolDrops.splice(index, 1);
-        }
-    }
-}
-
-function disposePistolDrop(pistol) {
-    scene.remove(pistol);
-    pistol.traverse((object) => {
-        if (object.isMesh) {
-            object.geometry.dispose();
-            object.material.dispose();
-        }
-    });
-}
-
-function takePlayerDamage(amount) {
-    if (player.damageCooldown > 0) {
-        return;
-    }
-
-    player.health = Math.max(0, player.health - amount);
-    player.damageCooldown = 0.75;
-    player.lastDamageFlash = 0.2;
-    damageFlash.style.opacity = "0.5";
-
-    if (player.health <= 0) {
-        const savedPistolShots = inventory.pistolShots;
-        player.position.set(0, 0.1, 5);
-        player.velocityY = 0;
-        player.health = player.maxHealth;
-        inventory.pistolShots = savedPistolShots;
-        updateInventoryDisplay();
-        player.damageCooldown = 1.2;
-    }
-}
-
-function shootEnemyProjectile(enemy) {
-    const projectile = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12, 12, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff3b30 })
-    );
-    const target = new THREE.Vector3(
-        player.position.x,
-        player.position.y + player.height * 0.5,
-        player.position.z
-    );
-
-    projectile.position.set(
-        enemy.mesh.position.x,
-        enemy.mesh.position.y + 1.25,
-        enemy.mesh.position.z
-    );
-    projectile.userData.velocity = target
-        .sub(projectile.position)
-        .normalize()
-        .multiplyScalar(4);
-    projectile.userData.life = 4;
-    scene.add(projectile);
-    enemyProjectiles.push(projectile);
-}
-
-function updateEnemyProjectiles(delta) {
-    for (let index = enemyProjectiles.length - 1; index >= 0; index -= 1) {
-        const projectile = enemyProjectiles[index];
-        projectile.position.addScaledVector(projectile.userData.velocity, delta);
-        projectile.userData.life -= delta;
-
-        const distanceToPlayer = projectile.position.distanceTo(
-            new THREE.Vector3(
-                player.position.x,
-                player.position.y + player.height * 0.5,
-                player.position.z
-            )
-        );
-
-        const hitWall = collidesWithWall(projectile.position, 0.12);
-
-        if (hitWall) {
-            scene.remove(projectile);
-            projectile.geometry.dispose();
-            projectile.material.dispose();
-            enemyProjectiles.splice(index, 1);
-        } else if (distanceToPlayer < player.radius + 0.15) {
-            takePlayerDamage(15);
-            scene.remove(projectile);
-            projectile.geometry.dispose();
-            projectile.material.dispose();
-            enemyProjectiles.splice(index, 1);
-        } else if (projectile.userData.life <= 0) {
-            scene.remove(projectile);
-            projectile.geometry.dispose();
-            projectile.material.dispose();
-            enemyProjectiles.splice(index, 1);
-        }
-    }
-}
-
-spawnInitialEnemies();
-updateScoreDisplay();
 
 camera.position.set(
     player.position.x,
@@ -1305,71 +424,153 @@ function wall(x, y, z, width, height, depth, color = 0x888888) {
 
 const keys = {};
 
+const p2pRoom = new URLSearchParams(window.location.search).get("room") || "fps-room";
+const p2pChannel = new BroadcastChannel(`fps-p2p-${p2pRoom}`);
+const remotePlayers = new Map();
+
+const p2p = {
+    localId: window.crypto && crypto.randomUUID ? crypto.randomUUID() : `peer-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    room: p2pRoom,
+    channel: p2pChannel
+};
+
+function ensureRemotePlayer(id) {
+    if (remotePlayers.has(id)) {
+        return remotePlayers.get(id);
+    }
+
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.3, 1.0, 4, 8),
+        new THREE.MeshStandardMaterial({
+            color: 0x7ec8ff,
+            emissive: 0x13314d,
+            roughness: 0.6,
+            metalness: 0.2
+        })
+    );
+
+    body.position.y = 0.9;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    scene.add(group);
+
+    const remote = {
+        id,
+        group,
+        body,
+        position: new THREE.Vector3(),
+        height: 1.7,
+        crouching: false,
+        sprinting: false,
+        grounded: true,
+        yaw: 0,
+        pitch: 0,
+        lastSeen: performance.now()
+    };
+
+    remotePlayers.set(id, remote);
+    return remote;
+}
+
+function handleRemoteMessage(message) {
+    if (!message || message.peerId === p2p.localId) {
+        return;
+    }
+
+    if (message.room && message.room !== p2p.room) {
+        return;
+    }
+
+    if (message.type === "PLAYER_STATE") {
+        const remote = ensureRemotePlayer(message.peerId);
+        remote.position.set(
+            message.position.x,
+            message.position.y,
+            message.position.z
+        );
+        remote.height = message.height ?? 1.7;
+        remote.yaw = message.yaw ?? 0;
+        remote.pitch = message.pitch ?? 0;
+        remote.crouching = !!message.crouching;
+        remote.sprinting = !!message.sprinting;
+        remote.grounded = !!message.grounded;
+        remote.lastSeen = performance.now();
+        remote.group.position.copy(remote.position);
+        remote.group.rotation.y = remote.yaw;
+        remote.body.position.y = remote.height * 0.52;
+
+        return;
+    }
+
+    if (message.type === "ACTION") {
+        const remote = ensureRemotePlayer(message.peerId);
+        remote.lastSeen = performance.now();
+    }
+}
+
+function send(message) {
+    if (!message) {
+        return;
+    }
+
+    const payload = {
+        ...message,
+        peerId: p2p.localId,
+        room: p2p.room,
+        sentAt: performance.now()
+    };
+
+    p2pChannel.postMessage(JSON.stringify(payload));
+}
+
+p2pChannel.onmessage = (event) => {
+    try {
+        const message = JSON.parse(event.data);
+        handleRemoteMessage(message);
+    } catch (error) {
+        console.warn("P2P message ignored:", error);
+    }
+};
+
+send({
+    type: "PLAYER_STATE",
+    position: { x: player.position.x, y: player.position.y, z: player.position.z },
+    height: player.height,
+    crouching: player.crouching,
+    sprinting: player.sprinting,
+    grounded: player.grounded
+});
+
 document.addEventListener("keydown", (event) => {
-
     keys[event.code] = true;
-
-    if (event.code === "Digit1") {
-        selectWeapon("gun");
-    }
-
-    if (event.code === "Digit2") {
-        selectWeapon("toaster");
-    }
-
-    if (event.code === "Digit3") {
-        selectWeapon("pistol");
-    }
-
-    if (event.code === "KeyR") {
-        reloadWeapon();
-    }
-
-    if (event.code === "KeyF") {
-        meleeAttack();
-    }
-
-    //Crouch
-
     if (event.code === "ControlLeft") {
         player.crouching = true;
+        send({type: "ACTION", action: "CROUCH", state: true});
     }
-
-    //SPRINT!
-
     if (event.code === "ShiftLeft") {
         player.sprinting = true;
+        send({type: "ACTION", action: "SPRINT", state: true});
     }
-
-    //Jump
-
-    if (
-        event.code === "Space" &&
-        player.grounded &&
-        !player.crouching
-    ) {
-
+    if (event.code === "Space" && player.grounded && !player.crouching) {
         player.velocityY = player.jumpForce;
-
         player.grounded = false;
+        send({ type: "ACTION", action: "JUMP" });
     }
 });
 
-
 document.addEventListener("keyup", (event) => {
-
     keys[event.code] = false;
-
     if (event.code === "ControlLeft") {
-
         if (canStand()) {
             player.crouching = false;
+            send({type: "ACTION", action: "CROUCH", state: false});
         }
-
     }
-
     if (event.code === "ShiftLeft") {
         player.sprinting = false;
+        send({type: "ACTION", action: "SPRINT", state: false});
     }
 });
 
@@ -1381,123 +582,9 @@ document.body.addEventListener("click", () => {
     }
 
     shoot();
+    send({ type: "ACTION", action: "SHOOT" });
 
 });
-
-document.body.addEventListener("mousedown", (event) => {
-    if (event.button === 2) {
-        isAiming = true;
-    }
-});
-
-document.body.addEventListener("mouseup", (event) => {
-    if (event.button === 2) {
-        isAiming = false;
-    }
-});
-
-document.body.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-});
-
-function setupMobileControls() {
-    const mobileControls = document.getElementById("mobile-controls");
-    const joystick = document.getElementById("mobile-joystick");
-    const knob = document.getElementById("joystick-knob");
-    const lookArea = document.getElementById("mobile-look");
-
-    if (!mobileControls || !joystick || !knob || !lookArea) {
-        return;
-    }
-
-    const setJoystick = (touch) => {
-        const bounds = joystick.getBoundingClientRect();
-        const centerX = bounds.left + bounds.width / 2;
-        const centerY = bounds.top + bounds.height / 2;
-        const maxDistance = bounds.width * 0.34;
-        const offsetX = touch.clientX - centerX;
-        const offsetY = touch.clientY - centerY;
-        const distance = Math.min(maxDistance, Math.hypot(offsetX, offsetY));
-        const angle = Math.atan2(offsetY, offsetX);
-        const x = Math.cos(angle) * distance;
-        const y = Math.sin(angle) * distance;
-
-        knob.style.transform = `translate(${x}px, ${y}px)`;
-        keys.KeyA = x < -maxDistance * 0.2;
-        keys.KeyD = x > maxDistance * 0.2;
-        keys.KeyW = y < -maxDistance * 0.2;
-        keys.KeyS = y > maxDistance * 0.2;
-    };
-
-    const clearJoystick = () => {
-        knob.style.transform = "translate(0, 0)";
-        keys.KeyA = false;
-        keys.KeyD = false;
-        keys.KeyW = false;
-        keys.KeyS = false;
-    };
-
-    joystick.addEventListener("touchstart", (event) => {
-        event.preventDefault();
-        setJoystick(event.changedTouches[0]);
-    }, { passive: false });
-    joystick.addEventListener("touchmove", (event) => {
-        event.preventDefault();
-        setJoystick(event.changedTouches[0]);
-    }, { passive: false });
-    joystick.addEventListener("touchend", clearJoystick);
-    joystick.addEventListener("touchcancel", clearJoystick);
-
-    let previousLook = null;
-    lookArea.addEventListener("touchstart", (event) => {
-        event.preventDefault();
-        previousLook = event.changedTouches[0];
-    }, { passive: false });
-    lookArea.addEventListener("touchmove", (event) => {
-        event.preventDefault();
-        const touch = event.changedTouches[0];
-        if (previousLook) {
-            yaw -= (touch.clientX - previousLook.clientX) * mouseSensitivity * 2;
-            pitch -= (touch.clientY - previousLook.clientY) * mouseSensitivity * 2;
-            pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
-            camera.rotation.order = "YXZ";
-            camera.rotation.y = yaw;
-            camera.rotation.x = pitch;
-        }
-        previousLook = touch;
-    }, { passive: false });
-    lookArea.addEventListener("touchend", () => { previousLook = null; });
-
-    mobileControls.querySelectorAll("button").forEach((button) => {
-        const action = button.dataset.action;
-        const weapon = button.dataset.weapon;
-        const press = (event) => {
-            event.preventDefault();
-            if (weapon) {
-                selectWeapon(weapon);
-                return;
-            }
-            if (action === "shoot") shoot();
-            if (action === "melee") meleeAttack();
-            if (action === "reload") reloadWeapon();
-            if (action === "jump" && player.grounded && !player.crouching) {
-                player.velocityY = player.jumpForce;
-                player.grounded = false;
-            }
-            if (action === "crouch") player.crouching = true;
-            if (action === "aim") isAiming = true;
-        };
-        const release = (event) => {
-            event.preventDefault();
-            if (action === "crouch" && canStand()) player.crouching = false;
-            if (action === "aim") isAiming = false;
-        };
-        button.addEventListener("touchstart", press, { passive: false });
-        button.addEventListener("touchend", release, { passive: false });
-    });
-}
-
-setupMobileControls();
 
 
 let yaw = 0;
@@ -1537,7 +624,9 @@ const playerCollider = {
     radius: 0.3
 };
 
-function collidesWithWall(position, radius = player.radius) {
+function collidesWithWall(position) {
+
+    const radius = player.radius;
 
     const playerBottom =
         position.y;
@@ -1681,17 +770,6 @@ function updateMovement(delta) {
     if (keys["KeyA"]) input.x -= 1;
     if (keys["KeyD"]) input.x += 1;
 
-    const wantsToSprint = player.sprinting && !player.crouching && input.lengthSq() > 0;
-
-    if (wantsToSprint && player.stamina > 0) {
-        player.stamina = Math.max(0, player.stamina - 30 * delta);
-    } else {
-        player.stamina = Math.min(player.maxStamina, player.stamina + 20 * delta);
-        if (player.stamina <= 0) {
-            player.sprinting = false;
-        }
-    }
-
 
 
     if (input.lengthSq() > 0) {
@@ -1713,7 +791,7 @@ function updateMovement(delta) {
         
         speed = player.crouchingSpeed;
 
-    } else if (player.sprinting && player.stamina > 0) {
+    } else if (player.sprinting) {
 
         speed = player.sprintingSpeed;
 
@@ -1779,96 +857,6 @@ function updateMovement(delta) {
     }
 }
 //
-function updateEnemies(delta) {
-    const enemyContactDistance = player.radius + 0.5 + 0.25;
-
-    for (const enemy of enemies) {
-        if (!enemy.alive) {
-            continue;
-        }
-
-        const dx = player.position.x - enemy.mesh.position.x;
-        const dz = player.position.z - enemy.mesh.position.z;
-        const distance = Math.hypot(dx, dz);
-
-        enemy.hitFlash = Math.max(0, enemy.hitFlash - delta);
-        enemy.speechTime = Math.max(0, enemy.speechTime - delta);
-        enemy.speech.style.display = enemy.speechTime > 0 ? "block" : "none";
-
-        if (enemy.speechTime > 0) {
-            const speechPosition = enemy.mesh.position.clone();
-            speechPosition.y += 2.4;
-            speechPosition.project(camera);
-            enemy.speech.style.left = `${(speechPosition.x * 0.5 + 0.5) * window.innerWidth}px`;
-            enemy.speech.style.top = `${(-speechPosition.y * 0.5 + 0.5) * window.innerHeight}px`;
-            enemy.speech.style.transform = "translate(-50%, -100%)";
-        }
-
-        enemy.body.material.color.setHex(
-            enemy.hitFlash > 0 ? 0xff5a5a : 0x8b1e1e
-        );
-
-        if (distance > enemyContactDistance) {
-            const directionX = dx / distance;
-            const directionZ = dz / distance;
-            const step = Math.min(
-                enemy.speed * delta,
-                distance - enemyContactDistance
-            );
-            const nextPosition = new THREE.Vector3(
-                enemy.mesh.position.x + directionX * step,
-                enemy.mesh.position.y,
-                enemy.mesh.position.z + directionZ * step
-            );
-
-            nextPosition.y = 0.1;
-
-            if (!collidesWithWall(nextPosition, enemy.radius)) {
-                enemy.mesh.position.x = nextPosition.x;
-                enemy.mesh.position.z = nextPosition.z;
-            } else {
-                const sideStep = enemy.speed * delta;
-                const leftPosition = new THREE.Vector3(
-                    enemy.mesh.position.x - directionZ * sideStep,
-                    0.1,
-                    enemy.mesh.position.z + directionX * sideStep
-                );
-                const rightPosition = new THREE.Vector3(
-                    enemy.mesh.position.x + directionZ * sideStep,
-                    0.1,
-                    enemy.mesh.position.z - directionX * sideStep
-                );
-                const leftOpen = !collidesWithWall(leftPosition, enemy.radius);
-                const rightOpen = !collidesWithWall(rightPosition, enemy.radius);
-
-                if (leftOpen || rightOpen) {
-                    const leftDistance = leftPosition.distanceToSquared(player.position);
-                    const rightDistance = rightPosition.distanceToSquared(player.position);
-                    const chosenPosition = leftOpen && (!rightOpen || leftDistance < rightDistance)
-                        ? leftPosition
-                        : rightPosition;
-
-                    enemy.mesh.position.x = chosenPosition.x;
-                    enemy.mesh.position.z = chosenPosition.z;
-                }
-            }
-
-            enemy.mesh.rotation.y = Math.atan2(directionX, directionZ);
-        }
-
-        enemy.attackCooldown = Math.max(0, enemy.attackCooldown - delta);
-
-        if (distance <= enemyContactDistance + 0.2 && enemy.attackCooldown <= 0) {
-            takePlayerDamage(10);
-            enemy.speechTime = 1.2;
-            enemy.attackCooldown = 1.2;
-        } else if (distance < 18 && enemy.attackCooldown <= 0) {
-            shootEnemyProjectile(enemy);
-            enemy.attackCooldown = 1.5;
-        }
-    }
-}
-
 function updateGravity(delta) {
 
     const gravity = 18;
@@ -2143,28 +1131,8 @@ function gameLoop(time) {
     updateMovement(delta);
 
     updateGravity(delta);
-    meleeCooldown = Math.max(0, meleeCooldown - delta);
-    reloadCooldown = Math.max(0, reloadCooldown - delta);
-    if (reloadCooldown === 0) {
-        updateAmmoDisplay();
-    }
 
     updateFPS();
-
-    updateWaves(delta);
-    updateEnemies(delta);
-    updateEnemyProjectiles(delta);
-    updateToastProjectiles(delta);
-        updateMeatDrops(delta, time);
-    updatePistolDrops(delta, time);
-    updateMeleeAnimation(delta);
-    updateAiming(delta);
-
-    player.damageCooldown = Math.max(0, player.damageCooldown - delta);
-    player.lastDamageFlash = Math.max(0, player.lastDamageFlash - delta);
-    healthDisplay.textContent = `HEALTH ${Math.ceil(player.health)}`;
-    staminaDisplay.textContent = `STAMINA ${Math.ceil(player.stamina)}`;
-    damageFlash.style.opacity = String(player.lastDamageFlash * 2.5);
 
     updateCrosshair(delta);
 
@@ -2175,6 +1143,33 @@ function gameLoop(time) {
         player.position.z
     );
 
+    const p2pState = {
+        type: "PLAYER_STATE",
+        position: {
+            x: player.position.x,
+            y: player.position.y,
+            z: player.position.z
+        },
+        height: player.height,
+        yaw,
+        pitch,
+        crouching: player.crouching,
+        sprinting: player.sprinting,
+        grounded: player.grounded
+    };
+
+    if (performance.now() - (p2p.lastStateSent || 0) > 80) {
+        send(p2pState);
+        p2p.lastStateSent = performance.now();
+    }
+
+    for (const [peerId, remote] of remotePlayers.entries()) {
+        if (performance.now() - remote.lastSeen > 5000) {
+            scene.remove(remote.group);
+            remotePlayers.delete(peerId);
+        }
+    }
+
     renderer.render(
         scene,
         camera
@@ -2184,6 +1179,46 @@ function gameLoop(time) {
 }
 
 requestAnimationFrame(gameLoop);
+const p2pRoomInput = document.getElementById("p2p-room");
+const p2pJoinButton = document.getElementById("p2p-join");
+
+if (p2pRoomInput && p2pJoinButton) {
+    p2pRoomInput.value = p2p.room;
+
+    p2pJoinButton.addEventListener("click", () => {
+        const nextRoom = (p2pRoomInput.value || "fps-room").trim();
+        if (!nextRoom) {
+            return;
+        }
+
+        p2p.room = nextRoom;
+        p2p.channel.close();
+        p2p.channel = new BroadcastChannel(`fps-p2p-${p2p.room}`);
+        p2p.channel.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                handleRemoteMessage(message);
+            } catch (error) {
+                console.warn("P2P message ignored:", error);
+            }
+        };
+        send({
+            type: "PLAYER_STATE",
+            position: {
+                x: player.position.x,
+                y: player.position.y,
+                z: player.position.z
+            },
+            height: player.height,
+            yaw,
+            pitch,
+            crouching: player.crouching,
+            sprinting: player.sprinting,
+            grounded: player.grounded
+        });
+    });
+}
+
 window.addEventListener("resize", () => {
     camera.aspect =
         window.innerWidth / window.innerHeight;
