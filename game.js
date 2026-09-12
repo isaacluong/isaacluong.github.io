@@ -1,4 +1,5 @@
 
+
 const wallBoxes = [];
 const sphereColliders = [];
 
@@ -1125,7 +1126,6 @@ function updateMeatDrops(delta, time) {
         }
     }
 }
-
 function disposeMeatDrop(meat) {
     scene.remove(meat);
     meat.traverse((object) => {
@@ -1306,14 +1306,46 @@ function wall(x, y, z, width, height, depth, color = 0x888888) {
 const keys = {};
 
 const p2pRoom = new URLSearchParams(window.location.search).get("room") || "fps-room";
-const p2pChannel = new BroadcastChannel(`fps-p2p-${p2pRoom}`);
 const remotePlayers = new Map();
+let p2pChannel = null;
 
 const p2p = {
     localId: window.crypto && crypto.randomUUID ? crypto.randomUUID() : `peer-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     room: p2pRoom,
-    channel: p2pChannel
+    channel: null
 };
+
+function createP2PChannel(roomName) {
+    if (!("BroadcastChannel" in window)) {
+        p2p.channel = null;
+        p2pChannel = null;
+        return null;
+    }
+
+    if (p2pChannel) {
+        try {
+            p2pChannel.onmessage = null;
+            p2pChannel.close();
+        } catch (error) {
+            console.warn("P2P channel close ignored:", error);
+        }
+    }
+
+    p2pChannel = new BroadcastChannel(`fps-p2p-${roomName}`);
+    p2pChannel.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            handleRemoteMessage(message);
+        } catch (error) {
+            console.warn("P2P message ignored:", error);
+        }
+    };
+
+    p2p.channel = p2pChannel;
+    return p2pChannel;
+}
+
+createP2PChannel(p2pRoom);
 
 function ensureRemotePlayer(id) {
     if (remotePlayers.has(id)) {
@@ -1322,7 +1354,7 @@ function ensureRemotePlayer(id) {
 
     const group = new THREE.Group();
     const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.3, 1.0, 4, 8),
+        new THREE.BoxGeometry(0.6, 1.2, 0.6),
         new THREE.MeshStandardMaterial({
             color: 0x7ec8ff,
             emissive: 0x13314d,
@@ -1331,16 +1363,28 @@ function ensureRemotePlayer(id) {
         })
     );
 
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.28, 14, 12),
+        new THREE.MeshStandardMaterial({
+            color: 0xdfeaf8,
+            roughness: 0.8,
+            metalness: 0.1
+        })
+    );
+
     body.position.y = 0.9;
+    head.position.y = 1.8;
     body.castShadow = true;
     body.receiveShadow = true;
-    group.add(body);
+    head.castShadow = true;
+    group.add(body, head);
     scene.add(group);
 
     const remote = {
         id,
         group,
         body,
+        head,
         position: new THREE.Vector3(),
         height: 1.7,
         crouching: false,
@@ -1372,15 +1416,14 @@ function handleRemoteMessage(message) {
             message.position.z
         );
         remote.height = message.height ?? 1.7;
-        remote.yaw = message.yaw ?? 0;
-        remote.pitch = message.pitch ?? 0;
         remote.crouching = !!message.crouching;
         remote.sprinting = !!message.sprinting;
         remote.grounded = !!message.grounded;
         remote.lastSeen = performance.now();
         remote.group.position.copy(remote.position);
-        remote.group.rotation.y = remote.yaw;
+        remote.group.rotation.y = remote.yaw ?? 0;
         remote.body.position.y = remote.height * 0.52;
+        remote.head.position.y = remote.height * 0.92 + 0.15;
         return;
     }
 
@@ -1391,7 +1434,7 @@ function handleRemoteMessage(message) {
 }
 
 function send(message) {
-    if (!message) {
+    if (!message || !p2pChannel) {
         return;
     }
 
@@ -1402,24 +1445,17 @@ function send(message) {
         sentAt: performance.now()
     };
 
-    p2pChannel.postMessage(JSON.stringify(payload));
-}
-
-p2pChannel.onmessage = (event) => {
     try {
-        const message = JSON.parse(event.data);
-        handleRemoteMessage(message);
+        p2pChannel.postMessage(JSON.stringify(payload));
     } catch (error) {
-        console.warn("P2P message ignored:", error);
+        console.warn("P2P send failed:", error);
     }
-};
+}
 
 send({
     type: "PLAYER_STATE",
     position: { x: player.position.x, y: player.position.y, z: player.position.z },
     height: player.height,
-    yaw,
-    pitch,
     crouching: player.crouching,
     sprinting: player.sprinting,
     grounded: player.grounded
@@ -2303,8 +2339,6 @@ function gameLoop(time) {
             z: player.position.z
         },
         height: player.height,
-        yaw,
-        pitch,
         crouching: player.crouching,
         sprinting: player.sprinting,
         grounded: player.grounded
@@ -2345,16 +2379,7 @@ if (p2pRoomInput && p2pJoinButton) {
         }
 
         p2p.room = nextRoom;
-        p2p.channel.close();
-        p2p.channel = new BroadcastChannel(`fps-p2p-${p2p.room}`);
-        p2p.channel.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                handleRemoteMessage(message);
-            } catch (error) {
-                console.warn("P2P message ignored:", error);
-            }
-        };
+        createP2PChannel(nextRoom);
         send({
             type: "PLAYER_STATE",
             position: {
@@ -2363,8 +2388,6 @@ if (p2pRoomInput && p2pJoinButton) {
                 z: player.position.z
             },
             height: player.height,
-            yaw,
-            pitch,
             crouching: player.crouching,
             sprinting: player.sprinting,
             grounded: player.grounded
