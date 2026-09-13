@@ -1,4 +1,23 @@
 
+// this is from stack overflow
+// Example configuration to make global connections work
+const peerConfiguration = {
+    iceServers: [
+        {
+            // Free Google STUN servers help your router find its public identity
+            urls: [
+                'stun:://google.com',
+                'stun:://google.com'
+            ]
+        }
+        // NOTE: For very strict corporate/university networks, you will 
+        // also need a free TURN relay server (like Metered.ca) listed here.
+    ]
+};
+//end
+
+// Pass this configuration directly into your WebRTC or PeerJS setup
+const myPeerConnection = new RTCPeerConnection(peerConfiguration);
 
 const wallBoxes = [];
 const sphereColliders = [];
